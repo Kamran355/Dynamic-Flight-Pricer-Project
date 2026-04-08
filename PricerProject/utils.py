@@ -68,3 +68,19 @@ def prompt_int(label: str, min_val: int = None, max_val: int = None) -> int:
             return val
         except ValueError:
             print_warning("Please enter a whole number.")
+
+
+def prompt_str(label: str) -> str:
+    while True:
+        raw = input(f"  {label}: ").strip()
+        if raw:
+            return raw
+        print_warning("This field cannot be empty.")
+
+
+def prompt_bool(label: str) -> bool:
+    while True:
+        raw = input(f"  {label} (y/n): ").strip().lower()
+        if raw in ("y", "yes"): return True
+        if raw in ("n", "no"):  return False
+        print_warning("Please enter 'y' or 'n'.")
