@@ -65,3 +65,35 @@ class FlightHistory:
             return max(0.0, float(delta))
         except Exception:
             return 7.0  # default 1 week if parsing fails
+    def route_summary(self) -> dict:
+        """Aggregate statistics per route for the reports module"""
+        records = self.all_records()
+        summary = {}
+        for rec in records:
+            key = rec.get("route_key", "UNKNOWN")
+            if key not in summary:
+                summary[key] = {
+                    "total": 0, "accepted": 0, "denied": 0,
+                    "prices": [], "revenues": []
+                }
+            s = summary[key]
+            s["total"] += 1
+            if rec.get("accepted"):
+                s["accepted"] += 1
+                rev = rec.get("pricing_result", {}).get("expected_revenue")
+                if rev:
+                    s["revenues"].append(rev)
+            else:
+                s["denied"] += 1
+            price = rec.get("pricing_result", {}).get("final_price_per_pax")
+            if price:
+                s["prices"].append(price)
+
+        for key, data in summary.items():
+            n = data["total"]
+            data["acceptance_rate_pct"] = round(100 * data["accepted"] / n, 1) if n else 0
+            data["avg_price"] = round(sum(data["prices"]) / len(data["prices"]), 2) if data["prices"] else None
+            data["avg_revenue"] = round(sum(data["revenues"]) / len(data["revenues"]), 2) if data["revenues"] else None
+            data["total_revenue"] = round(sum(data["revenues"]), 2)
+
+        return summary
