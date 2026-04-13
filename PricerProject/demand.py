@@ -77,3 +77,105 @@ class LogisticDemandModel:
         with open(self.model_file, "w") as f:
             json.dump(full, f, indent=2)
 
+    # Inference
+
+    def predict_accept_prob(
+        self,
+        price_per_pax: float,
+        flight_hours: float,
+        lead_days: float,
+        num_pax: int,
+        is_round_trip: bool
+    ) -> float:
+        # Return P(accept) in [0, 1] for the given flight/price configuration.
+        if self.n_updates < LR_MIN_SAMPLES:
+            return 0.5   # uninformative prior, not enough data yet
+
+        x = _build_feature_vector(
+            price_per_pax, flight_hours, lead_days, num_pax, is_round_trip
+        )
+        z = sum(b * xi for b, xi in zip(self.betas, x))
+        return _sigmoid(z)
+
+    def predict_accept_prob_curve(
+        self,
+        price_grid: np.ndarray,
+        flight_hours: float,
+        lead_days: float,
+        num_pax: int,
+        is_round_trip: bool
+    ) -> np.ndarray:
+        # Vectorised: return P(accept) for every price in price_grid.
+        probs = np.array([
+            self.predict_accept_prob(p, flight_hours, lead_days, num_pax, is_round_trip)
+            for p in price_grid
+        ])
+        return probs
+
+    # Learning
+
+    def update(
+        self,
+        price_per_pax: float,
+        flight_hours: float,
+        lead_days: float,
+        num_pax: int,
+        is_round_trip: bool,
+        accepted: bool
+    ):
+        """
+        Perform one SGD step given a new (features, outcome) observation.
+
+        Update rule:
+            error   = y - sigmoid(beta @ x)
+            beta_j += alpha * (error * x_j  -  lambda * beta_j)
+
+        The L2 term (lambda * beta_j) shrinks large weights toward zero,
+        acting as a regularizer to prevent overfitting on small datasets.
+        """
+        x = _build_feature_vector(
+            price_per_pax, flight_hours, lead_days, num_pax, is_round_trip
+        )
+        z      = sum(b * xi for b, xi in zip(self.betas, x))
+        p_hat  = _sigmoid(z)
+        y      = 1.0 if accepted else 0.0
+        error  = y - p_hat
+
+        alpha  = LR_LEARNING_RATE
+        lam    = LR_REGULARIZATION
+
+        for j in range(len(self.betas)):
+            # Skip L2 penalty on the intercept
+            reg = lam * self.betas[j] if j > 0 else 0.0
+            self.betas[j] += alpha * (error * x[j] - reg)
+
+        self.n_updates += 1
+        self._save_state()
+
+    # Diagnostics
+
+    def summary(self) -> dict:
+        # Return a human-readable snapshot of the current model state
+        feature_names = [
+            "intercept", "price_per_pax", "flight_hours",
+            "lead_days", "num_pax", "is_round_trip"
+        ]
+        return {
+            "n_updates": self.n_updates,
+            "min_samples_needed": LR_MIN_SAMPLES,
+            "model_active": self.n_updates >= LR_MIN_SAMPLES,
+            "coefficients": {
+                name: round(b, 6)
+                for name, b in zip(feature_names, self.betas)
+            },
+            "interpretation": {
+                "price_per_pax": (
+                    "Negative = higher price reduces P(accept). "
+                    f"Current: {self.betas[1]:+.5f} per $1 price increase."
+                ),
+                "lead_days": (
+                    "Positive = booking further in advance is slightly more likely to accept. "
+                    f"Current: {self.betas[3]:+.5f} per day."
+                ),
+            }
+        }
