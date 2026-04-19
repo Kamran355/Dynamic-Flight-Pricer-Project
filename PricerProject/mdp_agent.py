@@ -1,8 +1,8 @@
 """
 State Space S:
-    s = (acceptance_bucket, lead_time_bucket, load_factor_bucket, season_bucket)
+s = (acceptance_bucket, lead_time_bucket, load_factor_bucket, season_bucket)
 
-    (see Technical Report for State Space buckets)
+(see Technical Report for State Space buckets)
 
 Action Space A:
     Each action maps to a price multiplier relative to the NLP optimal price.
@@ -17,12 +17,6 @@ Q-Learning Update (Bellman equation approximation):
         γ = discount factor (MDP_DISCOUNT_FACTOR)
         α = learning rate   (MDP_LEARNING_RATE)
         s' = next state (updated after observing accept/deny outcome)
-
-Exploration Strategy:
-    ε-greedy: with probability ε, choose a random action (explore);
-    otherwise choose argmax_a Q(s, a) (exploit).
-    ε decays multiplicatively each episode toward MDP_EPSILON_MIN,
-    shifting from exploration to exploitation as data accumulates.
 """
 
 import json
