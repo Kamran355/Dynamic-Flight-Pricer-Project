@@ -18,3 +18,23 @@ def menu() -> str:
         if choice in ("1", "2", "3"):
             return choice
         print_warning("Please enter 1, 2, or 3.")
+
+
+def main():
+    while True:
+        choice = menu()
+        if choice == "1":
+            from pricer import run_pricing_session
+            run_pricing_session()
+        elif choice == "2":
+            from reports import run_report
+            run_report()
+        elif choice == "3":
+            print("\n  Safe skies.\n")
+            break
+        print()
+        input("  Press Enter to return to the main menu...")
+
+
+if __name__ == "__main__":
+    main()
