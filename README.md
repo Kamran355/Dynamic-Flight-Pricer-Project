@@ -6,7 +6,7 @@
 
 > Please see the README/Developer's Guide file pushed to the project tree:
 
-[Link to README/Developer's Guide]([Dynamic_Pricer_README-2.pdf](https://www.linkedin.com/in/kamran-sohrab/))
+[Link to README/Developer's Guide](Dynamic_Pricer_README-2.pdf](https://www.linkedin.com/in/kamran-sohrab/)
 
 [Link to Technical Report]([Dynamic_Pricer_Paper-10.pdf](https://www.linkedin.com/in/kamran-sohrab/))
 
