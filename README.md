@@ -10,6 +10,8 @@
 
 [Link to Technical Report](https://www.linkedin.com/in/kamran-sohrab/)
 
+(Navigate to the projects section in my LinkedIn profile to view the PDFs)
+
 #### Current Versions:
 
 > **Project V1.3** (April 28, 2026)
