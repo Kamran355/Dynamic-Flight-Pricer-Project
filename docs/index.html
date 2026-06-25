@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AirSide Dynamic Pricer</title>
+<meta name="description" content="A dynamic pricing engine for general aviation, combining statistical demand modeling, constrained optimization, and reinforcement learning.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --navy:       #0a2342;
+    --navy-soft:  #2c5a8c;
+    --ink:        #16213a;
+    --ink-soft:   #5b6678;
+    --border:     #dde3ea;
+    --rule:       #b9c2cf;
+    --white:      #ffffff;
+    --paper:      #fafbfc;
+    --success:    #1f7a4d;
+    --sans:       'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono:       'IBM Plex Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--white);
+    color: var(--ink);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+
+  a { color: var(--navy); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  header { border-bottom: 1px solid var(--border); }
+  .header-inner {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 28px 0;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .wordmark { display: flex; align-items: baseline; gap: 12px; }
+  .wordmark .brand { font-size: 1.15rem; font-weight: 700; color: var(--navy); letter-spacing: -0.01em; }
+  .wordmark .product {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--ink-soft);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-left: 1px solid var(--border);
+    padding-left: 12px;
+  }
+  .header-link { font-size: 0.86rem; font-weight: 500; color: var(--navy); }
+  .header-link::after { content: " \2192"; }
+
+  /* ── Eyebrow / headings ─────────────────────────────────── */
+  .eyebrow {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--navy-soft);
+    margin-bottom: 10px;
+  }
+  section h2 { font-size: 1.4rem; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  section > .wrap > p.lede { color: var(--ink-soft); max-width: 620px; margin-bottom: 36px; }
+
+  /* ── Hero ───────────────────────────────────────────────── */
+  .hero { padding: 64px 0 44px; }
+  .hero h1 {
+    font-size: clamp(1.9rem, 4vw, 2.5rem);
+    font-weight: 700;
+    color: var(--navy);
+    letter-spacing: -0.015em;
+    margin-bottom: 16px;
+    max-width: 700px;
+  }
+  .hero p { font-size: 1.02rem; color: var(--ink-soft); max-width: 620px; }
+  .hero-rule { height: 1px; background: var(--navy); margin-top: 36px; }
+
+  section { padding: 56px 0; }
+  section.alt { background: var(--paper); }
+
+  /* ── Flow diagram ───────────────────────────────────────── */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 44px;
+    flex-wrap: wrap;
+  }
+  .flow-step {
+    border: 1px solid var(--border);
+    background: var(--white);
+    padding: 12px 16px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--navy);
+    text-align: center;
+    flex: 1;
+    min-width: 110px;
+  }
+  .flow-step.result { background: var(--navy); color: var(--white); border-color: var(--navy); }
+  .flow-arrow {
+    color: var(--rule);
+    font-size: 0.9rem;
+    padding: 0 8px;
+    flex-shrink: 0;
+  }
+  @media (max-width: 680px) {
+    .flow { flex-direction: column; align-items: stretch; }
+    .flow-arrow { align-self: center; transform: rotate(90deg); padding: 4px 0; }
+  }
+
+  /* ── Layer rows ─────────────────────────────────────────── */
+  .layer-list { display: flex; flex-direction: column; }
+  .layer-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 20px;
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+  }
+  .layer-row:last-child { border-bottom: 1px solid var(--border); }
+  .layer-num { font-family: var(--mono); font-size: 0.78rem; color: var(--navy-soft); padding-top: 2px; }
+  .layer-name { font-size: 0.98rem; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .layer-desc { font-size: 0.92rem; color: var(--ink-soft); }
+  @media (max-width: 680px) {
+    .layer-row { grid-template-columns: 1fr; gap: 6px; }
+  }
+
+  /* ── Dashboard ──────────────────────────────────────────── */
+  .dash-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px 36px;
+    margin-bottom: 36px;
+  }
+  @media (max-width: 680px) {
+    .dash-grid { grid-template-columns: 1fr; }
+  }
+  .dash-field-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .dash-field-head label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .dash-readout {
+    font-family: var(--mono);
+    font-size: 0.86rem;
+    color: var(--navy);
+    font-weight: 500;
+  }
+  .dash-caption {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-top: 8px;
+    font-style: italic;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 2px;
+    background: var(--rule);
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--navy);
+    cursor: pointer;
+    transition: transform 0.12s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--navy);
+    border: none;
+    cursor: pointer;
+  }
+
+  .dash-outputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    border: 1px solid var(--border);
+    margin-bottom: 44px;
+  }
+  @media (max-width: 680px) {
+    .dash-outputs { grid-template-columns: 1fr; }
+  }
+  .dash-output-item {
+    background: var(--white);
+    padding: 24px 26px;
+  }
+  .dash-output-item .stat-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+  }
+  .dash-output-item .stat-value {
+    font-family: var(--mono);
+    font-size: 1.3rem;
+    color: var(--ink);
+  }
+  .dash-output-item.price { background: var(--navy); }
+  .dash-output-item.price .stat-label { color: rgba(255,255,255,0.6); }
+  .dash-output-item.price .stat-value { color: var(--white); font-size: 1.7rem; font-weight: 600; }
+
+  .explore-block {
+    border-top: 1px dashed var(--rule);
+    padding-top: 32px;
+  }
+  .explore-block h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--navy);
+    margin-bottom: 4px;
+  }
+  .explore-block p.explore-lede {
+    font-size: 0.86rem;
+    color: var(--ink-soft);
+    margin-bottom: 22px;
+    max-width: 560px;
+  }
+
+  .explore-slider-wrap {
+    position: relative;
+    padding: 22px 8px 6px;
+  }
+
+  .detent-marker {
+    position: absolute;
+    top: 18px;
+    width: 2px;
+    height: 12px;
+    background: var(--ink-soft);
+    pointer-events: none;
+  }
+  .detent-label {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  .detent-badge {
+    margin-left: 8px;
+    font-weight: 600;
+    color: var(--success);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .detent-badge.visible { opacity: 1; }
+  .likelihood-row { margin-top: 18px; }
+  .likelihood-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+  }
+  .likelihood-label .pct { font-family: var(--mono); color: var(--navy); font-weight: 600; }
+  .likelihood-bar {
+    height: 8px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .likelihood-fill {
+    height: 100%;
+    background: var(--navy);
+    transition: width 0.2s ease, background 0.15s ease;
+  }
+  .likelihood-fill.at-recommended { background: var(--success); }
+
+  .dash-disclosure {
+    margin-top: 36px;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    border-left: 2px solid var(--border);
+    padding-left: 16px;
+  }
+
+  /* ── Documentation cards ────────────────────────────────── */
+  .doc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    border: 1px solid var(--border);
+  }
+  @media (max-width: 680px) { .doc-grid { grid-template-columns: 1fr; } }
+  .doc-card {
+    background: var(--white);
+    padding: 26px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: background 0.15s;
+  }
+  .doc-card:hover { background: var(--paper); }
+  .doc-card .doc-label { font-size: 0.95rem; font-weight: 600; color: var(--ink); }
+  .doc-card .doc-desc { font-size: 0.84rem; color: var(--ink-soft); flex: 1; }
+  .doc-card .doc-arrow { font-size: 0.84rem; font-weight: 600; color: var(--navy); }
+
+  /* ── Footer ─────────────────────────────────────────────── */
+  footer { border-top: 1px solid var(--border); padding: 28px 0; }
+  .footer-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .footer-inner .brand { font-weight: 700; color: var(--navy); font-size: 0.92rem; }
+  .footer-inner .meta { font-size: 0.8rem; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap header-inner">
+    <div class="wordmark">
+      <span class="brand">AirSide</span>
+      <span class="product">Dynamic Pricer</span>
+    </div>
+    <a class="header-link" id="repoLinkHeader" href="#" target="_blank" rel="noopener">View repository</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <h1>A dynamic pricing engine for general aviation</h1>
+    <p>AirSide Dynamic Pricer estimates fair, cost aware pricing for private flights by combining statistical demand modeling, constrained optimization, and reinforcement learning: three methods drawn from an industrial engineering curriculum and applied to a real operational problem.</p>
+    <div class="hero-rule"></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">How it works</div>
+    <h2>Three systems working together</h2>
+    <p class="lede">A single price recommendation is the output of a short pipeline. Each stage builds on the one before it, and the system as a whole improves the more it is used.</p>
+
+    <div class="flow">
+      <div class="flow-step">Flight details</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Demand patterns</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Cost aware optimization</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">Long term policy</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step result">Recommended price</div>
+    </div>
+
+    <div class="layer-list">
+      <div class="layer-row">
+        <div class="layer-num">Layer One</div>
+        <div>
+          <div class="layer-name">Learning what passengers will pay</div>
+          <div class="layer-desc">Every time a price is quoted, whether it is accepted or declined becomes a data point. The system uses this growing history to estimate how likely a given price is to be accepted, taking into account how far in advance the flight was booked, how long the flight is, and how many people are flying. The more flights it prices, the sharper this estimate becomes.</div>
+        </div>
+      </div>
+      <div class="layer-row">
+        <div class="layer-num">Layer Two</div>
+        <div>
+          <div class="layer-name">Staying grounded in real costs</div>
+          <div class="layer-desc">Every recommendation has to make sense against what it actually costs to fly the airplane: fuel, the aircraft's hourly operating cost, and how much weight it can safely carry. The system always works out the cheapest way to fuel the trip and will never recommend a price below true cost, while still searching for the price that earns the most given what it has learned about demand.</div>
+        </div>
+      </div>
+      <div class="layer-row">
+        <div class="layer-num">Layer Three</div>
+        <div>
+          <div class="layer-name">Thinking beyond a single flight</div>
+          <div class="layer-desc">Rather than treating each quote in isolation, the system also reasons about the bigger picture. A reinforcement learning component lets it develop pricing habits over time that balance revenue on today's flight against the value of demand it builds for tomorrow, similar in spirit to how airlines and ride sharing platforms manage pricing at scale, applied here to general aviation.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="eyebrow">Interactive model</div>
+    <h2>See the pricing logic respond</h2>
+    <p class="lede">Adjust the assumptions below and watch the recommended price respond. This model runs entirely in your browser and illustrates the core relationships behind the system: cost recovery, scarcity, and the tradeoff between price and the likelihood of acceptance.</p>
+
+    <div class="dash-grid">
+      <div>
+        <div class="dash-field-head">
+          <label for="sFlightHours">Flight duration</label>
+          <span class="dash-readout" id="vFlightHours">1.5 hrs</span>
+        </div>
+        <input type="range" id="sFlightHours" min="0.3" max="4" step="0.1" value="1.5">
+        <div class="dash-caption">Longer flights cost more to operate.</div>
+      </div>
+
+      <div>
+        <div class="dash-field-head">
+          <label for="sPassengers">Passengers</label>
+          <span class="dash-readout" id="vPassengers">2</span>
+        </div>
+        <input type="range" id="sPassengers" min="1" max="3" step="1" value="2">
+        <div class="dash-caption">More passengers share the same fixed cost.</div>
+      </div>
+
+      <div>
+        <div class="dash-field-head">
+          <label for="sFuelPrice">Fuel price</label>
+          <span class="dash-readout" id="vFuelPrice">$6.50 / gal</span>
+        </div>
+        <input type="range" id="sFuelPrice" min="4" max="9" step="0.1" value="6.5">
+        <div class="dash-caption">Fuel cost passes directly into the price.</div>
+      </div>
+
+      <div>
+        <div class="dash-field-head">
+          <label for="sLeadDays">Days before departure</label>
+          <span class="dash-readout" id="vLeadDays">14 days</span>
+        </div>
+        <input type="range" id="sLeadDays" min="0" max="30" step="1" value="14">
+        <div class="dash-caption">Less advance notice typically commands a premium.</div>
+      </div>
+    </div>
+
+    <div class="dash-outputs">
+      <div class="dash-output-item">
+        <div class="stat-label">Operating cost for this flight</div>
+        <div class="stat-value" id="outOpCost">$0.00</div>
+      </div>
+      <div class="dash-output-item price">
+        <div class="stat-label">Recommended price per seat</div>
+        <div class="stat-value" id="outPrice">$0.00</div>
+      </div>
+    </div>
+
+    <div class="explore-block">
+      <h3>Try your own price</h3>
+      <p class="explore-lede">The slider's range deliberately extends below the actual cost of the flight, so you can see what happens at either extreme. The recommended price is not the price most likely to be accepted, that would simply be the cheapest one. It is the price where the chance of acceptance and the margin earned if accepted together produce the highest expected profit. The tick mark shows that point, and the slider will catch there as you pass near it.</p>
+
+      <div class="dash-field-head">
+        <label for="sExplorePrice">Price per seat</label>
+        <span class="dash-readout" id="vExplorePrice">$0.00</span>
+      </div>
+      <div class="explore-slider-wrap">
+        <div class="detent-marker" id="detentMarker">
+          <span class="detent-label">Recommended</span>
+        </div>
+        <input type="range" id="sExplorePrice" class="explore-slider" min="0" max="1" step="1" value="0">
+      </div>
+
+      <div class="likelihood-row">
+        <div class="likelihood-label">
+          <span>Estimated likelihood of acceptance<span class="detent-badge" id="detentBadge">At recommended price</span></span>
+          <span class="pct" id="likelihoodPct">0%</span>
+        </div>
+        <div class="likelihood-bar"><div class="likelihood-fill" id="likelihoodFill"></div></div>
+      </div>
+    </div>
+
+    <p class="dash-disclosure">This interactive model uses the same aircraft figures documented in the technical paper, simplified into a single illustrative demand curve for clarity. The recommended price is found by searching that curve for the price that maximizes expected profit, the same objective the real engine optimizes against its trained statistical model. The full system, including the statistical demand model and the reinforcement learning component that both improve with real flight history, is implemented in Python in the linked repository.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Documentation</div>
+    <h2>Read the full design</h2>
+    <p class="lede">The technical paper documents every equation and constraint behind the engine. The developer guide covers setup, configuration, and how to extend the codebase.</p>
+
+    <div class="doc-grid">
+      <a class="doc-card" id="docPaper" href="#" target="_blank" rel="noopener">
+        <span class="doc-label">Technical Paper</span>
+        <span class="doc-desc">The full mathematical foundation of all three layers, in PDF.</span>
+        <span class="doc-arrow">Download &rarr;</span>
+      </a>
+      <a class="doc-card" id="docReadme" href="#" target="_blank" rel="noopener">
+        <span class="doc-label">README &amp; Developer Guide</span>
+        <span class="doc-desc">Setup instructions, configuration reference, and architecture notes.</span>
+        <span class="doc-arrow">Download &rarr;</span>
+      </a>
+      <a class="doc-card" id="docRepo" href="#" target="_blank" rel="noopener">
+        <span class="doc-label">Repository</span>
+        <span class="doc-desc">The complete source, including the command line tool.</span>
+        <span class="doc-arrow">View on GitHub &rarr;</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap footer-inner">
+    <span class="brand">AirSide</span>
+    <span class="meta">Educational and hypothetical use only. Not legal, financial, or aeronautical advice.</span>
+  </div>
+</footer>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════
+// CONFIGURATION
+// This is the only edit required before publishing. Everything else on
+// this page, including both document links, uses paths relative to this
+// file, so moving or renaming the repository never requires touching
+// anything but this one line.
+// ════════════════════════════════════════════════════════════════════════
+const REPO_URL = "https://github.com/Kamran355/Dynamic-Flight-Pricer-Project";
+
+document.getElementById("repoLinkHeader").href = REPO_URL;
+document.getElementById("docRepo").href   = REPO_URL;
+document.getElementById("docPaper").href  = "Dynamic_Pricer_Paper.pdf";
+document.getElementById("docReadme").href = "Dynamic_Pricer_README.pdf";
+
+// ════════════════════════════════════════════════════════════════════════
+// ILLUSTRATIVE PRICING MODEL
+// Uses the real aircraft constants from the technical paper. The demand
+// and lead time relationships are simplified for a single, transparent
+// formula rather than the trained statistical model in the repository.
+// ════════════════════════════════════════════════════════════════════════
+const FUEL_BURN_GPH      = 12.0;
+const RESERVE_HOURS      = 0.75;
+const COST_PER_TACH_HOUR = 115.00;
+const TACH_RATIO         = 0.80;
+
+function fmtCurrency(n) {
+  return "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// The explorable price range, expressed as a multiple of cost per seat.
+// The lower bound sits below true cost on purpose, so it is possible to
+// see what happens to both likelihood and profit when pricing at a loss.
+const K_MIN = 0.6;
+const K_MAX = 3.0;
+
+// How quickly acceptance likelihood falls as price rises, at baseline
+// price sensitivity. Shorter lead times make passengers less price
+// sensitive, which is modeled as a flatter decline, not a separate
+// multiplier bolted onto the price afterward.
+const BASE_SLOPE = 40;
+
+function sensitivityMultiplier(leadDays) {
+  if (leadDays < 1) return 0.65;
+  if (leadDays < 3) return 0.78;
+  if (leadDays < 14) return 0.90;
+  return 1.00;
+}
+
+// The likelihood bar always shows at least this much, since a real demand
+// curve never truly reaches zero, it only gets very small.
+const MIN_LIKELIHOOD = 4;
+
+function likelihoodPercent(price, costPerSeat, slope) {
+  const k = price / costPerSeat;
+  const raw = 100 - slope * (k - K_MIN);
+  return Math.max(MIN_LIKELIHOOD, Math.min(100, raw));
+}
+
+// Searches the same price grid a passenger could reach with the slider
+// and returns the price where likelihood times margin, expected profit
+// per seat, is largest. This mirrors the grid search the real engine
+// runs in Section 3.2.3 of the technical paper, just over a simplified
+// demand curve instead of the trained statistical model.
+function findRecommendedPrice(costPerSeat, slope) {
+  const steps = 400;
+  let bestPrice = costPerSeat * K_MIN;
+  let bestProfit = -Infinity;
+  for (let i = 0; i <= steps; i++) {
+    const k = K_MIN + (K_MAX - K_MIN) * (i / steps);
+    const price = k * costPerSeat;
+    const likelihoodFraction = likelihoodPercent(price, costPerSeat, slope) / 100;
+    const profit = likelihoodFraction * (price - costPerSeat);
+    if (profit > bestProfit) {
+      bestProfit = profit;
+      bestPrice = price;
+    }
+  }
+  return bestPrice;
+}
+
+function computeCore() {
+  const flightHours = parseFloat(document.getElementById("sFlightHours").value);
+  const passengers   = parseInt(document.getElementById("sPassengers").value, 10);
+  const fuelPrice     = parseFloat(document.getElementById("sFuelPrice").value);
+  const leadDays      = parseInt(document.getElementById("sLeadDays").value, 10);
+
+  const gallons       = FUEL_BURN_GPH * (flightHours + RESERVE_HOURS);
+  const fuelCost       = gallons * fuelPrice;
+  const tachHours       = flightHours * TACH_RATIO;
+  const aircraftCost     = tachHours * COST_PER_TACH_HOUR;
+  const operatingCost     = aircraftCost + fuelCost;
+  const costPerSeat         = operatingCost / passengers;
+
+  const slope = BASE_SLOPE * sensitivityMultiplier(leadDays);
+  const minPrice = costPerSeat * K_MIN;
+  const maxPrice = costPerSeat * K_MAX;
+  const recommended = findRecommendedPrice(costPerSeat, slope);
+
+  return { operatingCost, costPerSeat, slope, minPrice, maxPrice, recommended };
+}
+
+// How close the explore slider has to be to the recommended price, as a
+// fraction of the full slider range, before it catches there.
+const DETENT_FRACTION = 0.025;
+
+let lastCore = null;
+
+function updateLikelihoodDisplay(price, costPerSeat, slope, atDetent) {
+  const pct = likelihoodPercent(price, costPerSeat, slope);
+  const fill = document.getElementById("likelihoodFill");
+  fill.style.width = pct.toFixed(0) + "%";
+  fill.classList.toggle("at-recommended", !!atDetent);
+  document.getElementById("likelihoodPct").textContent = pct.toFixed(0) + "%";
+  document.getElementById("vExplorePrice").textContent = fmtCurrency(price);
+  document.getElementById("detentBadge").classList.toggle("visible", !!atDetent);
+}
+
+function positionDetentMarker() {
+  if (!lastCore) return;
+  const slider = document.getElementById("sExplorePrice");
+  const marker = document.getElementById("detentMarker");
+  const min = parseFloat(slider.min);
+  const max = parseFloat(slider.max);
+  const pct = max > min ? (lastCore.recommended - min) / (max - min) : 0.5;
+
+  const trackWidth = slider.offsetWidth;
+  const thumbRadius = 8;
+  const usable = Math.max(0, trackWidth - thumbRadius * 2);
+  const leftPx = thumbRadius + usable * pct;
+  marker.style.left = leftPx + "px";
+}
+
+function refreshDashboard(resetExplorePrice) {
+  const core = computeCore();
+  lastCore = core;
+
+  document.getElementById("vFlightHours").textContent = parseFloat(document.getElementById("sFlightHours").value).toFixed(1) + " hrs";
+  document.getElementById("vPassengers").textContent = document.getElementById("sPassengers").value;
+  document.getElementById("vFuelPrice").textContent = fmtCurrency(document.getElementById("sFuelPrice").value) + " / gal";
+  document.getElementById("vLeadDays").textContent = document.getElementById("sLeadDays").value + " days";
+
+  document.getElementById("outOpCost").textContent = fmtCurrency(core.operatingCost);
+  document.getElementById("outPrice").textContent = fmtCurrency(core.recommended);
+
+  const exploreSlider = document.getElementById("sExplorePrice");
+  exploreSlider.min = core.minPrice.toFixed(2);
+  exploreSlider.max = core.maxPrice.toFixed(2);
+  exploreSlider.step = "0.50";
+
+  let value, atDetent;
+  if (resetExplorePrice) {
+    value = core.recommended;
+    atDetent = true;
+  } else {
+    const range = core.maxPrice - core.minPrice;
+    const threshold = range * DETENT_FRACTION;
+    const raw = Math.min(core.maxPrice, Math.max(core.minPrice, parseFloat(exploreSlider.value)));
+    atDetent = Math.abs(raw - core.recommended) <= threshold;
+    value = atDetent ? core.recommended : raw;
+  }
+  exploreSlider.value = value.toFixed(2);
+
+  positionDetentMarker();
+  updateLikelihoodDisplay(value, core.costPerSeat, core.slope, atDetent);
+}
+
+["sFlightHours", "sPassengers", "sFuelPrice", "sLeadDays"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", () => refreshDashboard(true));
+});
+
+document.getElementById("sExplorePrice").addEventListener("input", (e) => {
+  const core = lastCore || computeCore();
+  const range = core.maxPrice - core.minPrice;
+  const threshold = range * DETENT_FRACTION;
+  let value = parseFloat(e.target.value);
+  const atDetent = Math.abs(value - core.recommended) <= threshold;
+  if (atDetent) {
+    value = core.recommended;
+    e.target.value = value.toFixed(2);
+  }
+  updateLikelihoodDisplay(value, core.costPerSeat, core.slope, atDetent);
+});
+
+window.addEventListener("resize", positionDetentMarker);
+
+refreshDashboard(true);
+</script>
+
+</body>
+</html>
